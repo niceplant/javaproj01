@@ -26,7 +26,7 @@ public class DatabaseManager {
     private void createTables() throws SQLException {
         Statement stmt = conn.createStatement();
         
-        // Movies table
+        // 1. Movies table (Unchanged)
         stmt.execute("CREATE TABLE IF NOT EXISTS movies (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "name TEXT NOT NULL UNIQUE, " +
@@ -34,14 +34,14 @@ public class DatabaseManager {
                 "duration INTEGER, " +
                 "rating TEXT)");
 
-        // Theatres table
+        // 2. Theatres table (Unchanged)
         stmt.execute("CREATE TABLE IF NOT EXISTS theatres (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "name TEXT NOT NULL UNIQUE, " +
                 "location TEXT, " +
                 "total_seats INTEGER)");
 
-        // Bookings table
+        // 3. Bookings table (Unchanged)
         stmt.execute("CREATE TABLE IF NOT EXISTS bookings (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
                 "movie_id INTEGER, " +
@@ -54,6 +54,13 @@ public class DatabaseManager {
                 "FOREIGN KEY(movie_id) REFERENCES movies(id), " +
                 "FOREIGN KEY(theatre_id) REFERENCES theatres(id))");
 
+        // 4. Users/Admin table (NEW)
+        stmt.execute("CREATE TABLE IF NOT EXISTS users (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, " +
+                "username TEXT NOT NULL UNIQUE, " +
+                "password TEXT NOT NULL, " + // Note: In a real app, hash and salt the password!
+                "role TEXT NOT NULL)"); // 'admin' or 'user'
+
         stmt.close();
         System.out.println("Tables created successfully!");
     }
@@ -62,69 +69,154 @@ public class DatabaseManager {
         Statement checkStmt = conn.createStatement();
         ResultSet rs = checkStmt.executeQuery("SELECT COUNT(*) FROM movies");
         rs.next();
-        if (rs.getInt(1) > 0) {
-            rs.close();
-            checkStmt.close();
+        boolean moviesExist = rs.getInt(1) > 0;
+        rs.close();
+        
+        rs = checkStmt.executeQuery("SELECT COUNT(*) FROM users");
+        rs.next();
+        boolean usersExist = rs.getInt(1) > 0;
+        rs.close();
+        checkStmt.close();
+        
+        if (moviesExist && usersExist) {
             System.out.println("Sample data already exists.");
             return;
         }
-        rs.close();
-        checkStmt.close();
 
-        // Insert sample movies
-        PreparedStatement pstmt = conn.prepareStatement(
-                "INSERT INTO movies (name, genre, duration, rating) VALUES (?, ?, ?, ?)");
-        
-        String[][] movies = {
-            {"The Adventure Begins", "Action", "150", "PG-13"},
-            {"Love in Paris", "Romance", "120", "PG"},
-            {"The Mystery Manor", "Thriller", "135", "R"},
-            {"Cosmic Journey", "Sci-Fi", "160", "PG-13"},
-            {"Comedy Nights", "Comedy", "110", "PG"},
-            {"Dark Secrets", "Horror", "125", "R"}
-        };
+        // Insert sample movies and theatres (Original logic runs only if movies don't exist)
+        if (!moviesExist) {
+            // Insert sample movies
+            PreparedStatement pstmt = conn.prepareStatement(
+                    "INSERT INTO movies (name, genre, duration, rating) VALUES (?, ?, ?, ?)");
+            
+            String[][] movies = {
+                {"The Adventure Begins", "Action", "150", "PG-13"},
+                {"Love in Paris", "Romance", "120", "PG"},
+                {"The Mystery Manor", "Thriller", "135", "R"},
+                {"Cosmic Journey", "Sci-Fi", "160", "PG-13"},
+                {"Comedy Nights", "Comedy", "110", "PG"},
+                {"Dark Secrets", "Horror", "125", "R"}
+            };
 
-        for (String[] movie : movies) {
-            pstmt.setString(1, movie[0]);
-            pstmt.setString(2, movie[1]);
-            pstmt.setInt(3, Integer.parseInt(movie[2]));
-            pstmt.setString(4, movie[3]);
-            pstmt.executeUpdate();
+            for (String[] movie : movies) {
+                pstmt.setString(1, movie[0]);
+                pstmt.setString(2, movie[1]);
+                pstmt.setInt(3, Integer.parseInt(movie[2]));
+                pstmt.setString(4, movie[3]);
+                pstmt.executeUpdate();
+            }
+
+            // Insert sample theatres
+            pstmt = conn.prepareStatement(
+                    "INSERT INTO theatres (name, location, total_seats) VALUES (?, ?, ?)");
+            
+            String[][] theatres = {
+                {"PVR Cinemas", "Mall Road", "80"},
+                {"INOX Theatre", "City Center", "80"},
+                {"Cinepolis", "Downtown Plaza", "80"},
+                {"Carnival Cinemas", "Metro Station", "80"}
+            };
+
+            for (String[] theatre : theatres) {
+                pstmt.setString(1, theatre[0]);
+                pstmt.setString(2, theatre[1]);
+                pstmt.setInt(3, Integer.parseInt(theatre[2]));
+                pstmt.executeUpdate();
+            }
+            pstmt.close();
+            System.out.println("Sample movie/theatre data inserted successfully!");
         }
 
-        // Insert sample theatres
-        pstmt = conn.prepareStatement(
-                "INSERT INTO theatres (name, location, total_seats) VALUES (?, ?, ?)");
-        
-        String[][] theatres = {
-            {"PVR Cinemas", "Mall Road", "80"},
-            {"INOX Theatre", "City Center", "80"},
-            {"Cinepolis", "Downtown Plaza", "80"},
-            {"Carnival Cinemas", "Metro Station", "80"}
-        };
-
-        for (String[] theatre : theatres) {
-            pstmt.setString(1, theatre[0]);
-            pstmt.setString(2, theatre[1]);
-            pstmt.setInt(3, Integer.parseInt(theatre[2]));
+        // Insert sample admin user (NEW)
+        if (!usersExist) {
+            PreparedStatement pstmt = conn.prepareStatement(
+                    "INSERT INTO users (username, password, role) VALUES (?, ?, ?)");
+            
+            // ADMIN: username='admin', password='1234' (Matches LoginFrame stub)
+            pstmt.setString(1, "admin");
+            pstmt.setString(2, "1234"); 
+            pstmt.setString(3, "admin");
             pstmt.executeUpdate();
-        }
 
-        pstmt.close();
-        System.out.println("Sample data inserted successfully!");
+            // Example USER: username='user', password='password'
+            pstmt.setString(1, "user");
+            pstmt.setString(2, "password"); 
+            pstmt.setString(3, "user");
+            pstmt.executeUpdate();
+
+            pstmt.close();
+            System.out.println("Sample user data inserted successfully!");
+        }
     }
+
+    // --- NEW ADMIN FUNCTIONALITY ---
+
+    public boolean adminLogin(String username, String password) {
+        try (PreparedStatement pstmt = conn.prepareStatement(
+                "SELECT role FROM users WHERE username = ? AND password = ?")) {
+            
+            pstmt.setString(1, username);
+            pstmt.setString(2, password);
+
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next() && "admin".equalsIgnoreCase(rs.getString("role"))) {
+                return true;
+            }
+        } catch (SQLException e) {
+            System.err.println("Admin login error: " + e.getMessage());
+        }
+        return false;
+    }
+
+    public boolean addMovie(String movieTitle, String genre, int duration, String rating) {
+        try (PreparedStatement pstmt = conn.prepareStatement(
+                "INSERT INTO movies (name, genre, duration, rating) VALUES (?, ?, ?, ?)")) {
+            
+            pstmt.setString(1, movieTitle);
+            pstmt.setString(2, genre);
+            pstmt.setInt(3, duration);
+            pstmt.setString(4, rating);
+            pstmt.executeUpdate();
+            System.out.println("Movie added: " + movieTitle);
+            return true;
+        } catch (SQLException e) {
+            System.err.println("Error adding movie: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean addTheatre(String name, String location, int totalSeats) {
+        try (PreparedStatement pstmt = conn.prepareStatement(
+                "INSERT INTO theatres (name, location, total_seats) VALUES (?, ?, ?)")) {
+            
+            pstmt.setString(1, name);
+            pstmt.setString(2, location);
+            pstmt.setInt(3, totalSeats);
+            pstmt.executeUpdate();
+            System.out.println("Theatre added: " + name);
+            return true;
+        } catch (SQLException e) {
+            System.err.println("Error adding theatre: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    // Note: The previous UI design didn't explicitly select movie/theatre IDs for a show. 
+    // Since adding a 'show' is complex (needs linking), the current DB design is fine 
+    // as it assumes the booking date/time is implicit per movie/theatre combination. 
+    // No dedicated 'shows' table is needed *yet*.
+
+    // --- EXISTING USER FUNCTIONALITY (Unchanged, for completeness) ---
 
     public ArrayList<String> getMovies() {
         ArrayList<String> movies = new ArrayList<>();
-        try {
-            Statement stmt = conn.createStatement();
-            ResultSet rs = stmt.executeQuery("SELECT name, genre, duration FROM movies ORDER BY name");
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT name, genre, duration FROM movies ORDER BY name")) {
+            
             while (rs.next()) {
                 movies.add(rs.getString("name") + " (" + rs.getString("genre") + ", " + 
-                          rs.getInt("duration") + " min)");
+                            rs.getInt("duration") + " min)");
             }
-            rs.close();
-            stmt.close();
         } catch (SQLException e) {
             System.err.println("Error loading movies: " + e.getMessage());
             e.printStackTrace();
@@ -134,14 +226,12 @@ public class DatabaseManager {
 
     public ArrayList<String> getTheatres() {
         ArrayList<String> theatres = new ArrayList<>();
-        try {
-            Statement stmt = conn.createStatement();
-            ResultSet rs = stmt.executeQuery("SELECT name, location FROM theatres ORDER BY name");
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT name, location FROM theatres ORDER BY name")) {
+            
             while (rs.next()) {
                 theatres.add(rs.getString("name") + " - " + rs.getString("location"));
             }
-            rs.close();
-            stmt.close();
         } catch (SQLException e) {
             System.err.println("Error loading theatres: " + e.getMessage());
             e.printStackTrace();
@@ -180,7 +270,6 @@ public class DatabaseManager {
     public boolean bookTickets(String movieInfo, String theatre, String date, 
                                ArrayList<String> seats, String name, String phone) {
         try {
-            // Extract movie name from the combo box format
             String movieName = movieInfo.split(" \\(")[0];
             
             int movieId = getId("movies", "name", movieName);
@@ -212,15 +301,14 @@ public class DatabaseManager {
 
     public ArrayList<String[]> getAllBookings() {
         ArrayList<String[]> bookings = new ArrayList<>();
-        try {
-            Statement stmt = conn.createStatement();
-            ResultSet rs = stmt.executeQuery(
+        try (Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(
                     "SELECT m.name as movie, t.name as theatre, b.booking_date, " +
                     "b.seat_number, b.customer_name, b.phone " +
                     "FROM bookings b " +
                     "JOIN movies m ON b.movie_id = m.id " +
                     "JOIN theatres t ON b.theatre_id = t.id " +
-                    "ORDER BY b.booking_date DESC, b.booking_time DESC");
+                    "ORDER BY b.booking_date DESC, b.booking_time DESC")) {
 
             while (rs.next()) {
                 bookings.add(new String[]{
@@ -232,9 +320,6 @@ public class DatabaseManager {
                         rs.getString("phone")
                 });
             }
-
-            rs.close();
-            stmt.close();
         } catch (SQLException e) {
             System.err.println("Error loading bookings: " + e.getMessage());
             e.printStackTrace();
@@ -243,14 +328,14 @@ public class DatabaseManager {
     }
 
     private int getId(String table, String column, String value) throws SQLException {
-        PreparedStatement pstmt = conn.prepareStatement(
-                "SELECT id FROM " + table + " WHERE " + column + " = ?");
-        pstmt.setString(1, value);
-        ResultSet rs = pstmt.executeQuery();
-        int id = rs.getInt("id");
-        rs.close();
-        pstmt.close();
-        return id;
+        try (PreparedStatement pstmt = conn.prepareStatement(
+                "SELECT id FROM " + table + " WHERE " + column + " = ?")) {
+            pstmt.setString(1, value);
+            ResultSet rs = pstmt.executeQuery();
+            int id = rs.getInt("id");
+            rs.close();
+            return id;
+        }
     }
 
     public void closeConnection() {
